@@ -1,0 +1,2 @@
+# farmerpay-optimizer
+to calculate 
