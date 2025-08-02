@@ -55,7 +55,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Title
-st.markdown('<h1 class="main-header">🚀 FarmerPay Profitability Optimizer</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">🚀 FarmerPay Profitability Optimizer-By B.V.R.C.Purushottam</h1>', unsafe_allow_html=True)
 st.markdown("### Advanced Business Intelligence & Strategy Platform")
 st.markdown("Optimize FarmerPay's profitability through data-driven insights and strategic planning")
 
