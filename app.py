@@ -1,669 +1,1386 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import datetime
-import requests
-import time
-from streamlit_lottie import st_lottie
-
-# Lottie loader function
-def load_lottieurl(url):
-    r = requests.get(url)
-    if r.status_code != 200:
-        return None
-    return r.json()
 
 # Page configuration
 st.set_page_config(
-    page_title="FarmerPay Profitability Optimizer",
-    page_icon="🚀",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="Bank Profitability Analysis Calculator",
+    page_icon="🏦",
+    layout="wide"
 )
 
-# Lottie animation at top
-lottie_url = "https://assets8.lottiefiles.com/packages/lf20_4hwj9g4z.json"
-lottie_json = load_lottieurl(lottie_url)
-if lottie_json:
-    st_lottie(lottie_json, speed=1, height=160, key="header_animation")
+# Title and description
+st.title("🏦 Bank Profitability Analysis Calculator")
+st.markdown("### Dynamic NPA-based KCC Loan Profitability Analysis")
+st.markdown("This calculator analyzes bank profitability for Kisan Credit Card (KCC) loans based on NPA rates and other financial parameters.")
 
-# Custom CSS for better styling and animations
-st.markdown("""
-<style>
-@keyframes fadeIn {
-  0% { opacity: 0; transform: translateY(-20px);}
-  100% { opacity: 1; transform: translateY(0);}
-}
-.main-header {
-    font-size: 3rem;
-    font-weight: bold;
-    text-align: center;
-    background: linear-gradient(90deg, #1f77b4, #ff7f0e);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    margin-bottom: 2rem;
-    animation: fadeIn 1s ease-in;
-}
-.metric-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    padding: 1rem;
-    border-radius: 10px;
-    color: white;
-    text-align: center;
-    margin: 0.5rem 0;
-    animation: fadeIn 0.7s ease-in;
-}
-.improvement-positive {
-    color: #28a745;
-    font-weight: bold;
-}
-.improvement-negative {
-    color: #dc3545;
-    font-weight: bold;
-}
-.phase-header {
-    background: linear-gradient(45deg, #2E8B57, #98FB98);
-    padding: 1rem;
-    border-radius: 8px;
-    color: white;
-    font-weight: bold;
-    margin: 1rem 0;
-    text-align: center;
-}
-</style>
-""", unsafe_allow_html=True)
+# Sidebar for inputs
+st.sidebar.header("📊 Input Parameters")
 
-# Title
-st.markdown('<h1 class="main-header">🚀 FarmerPay Profitability Optimizer-By B.V.R.C.Purushottam</h1>', unsafe_allow_html=True)
-st.markdown("### Advanced Business Intelligence & Strategy Platform")
-st.markdown("Optimize FarmerPay's profitability through data-driven insights and strategic planning")
-
-# Animated GIF for section transition
-st.image("https://media.giphy.com/media/xT9IgzoKnwFNmISR8I/giphy.gif", caption="Business Intelligence in Action")
-
-# Sidebar Configuration
-st.sidebar.header("🎯 Strategic Configuration")
-
-# Business Model Selection
-business_model = st.sidebar.selectbox(
-    "Business Model",
-    ["Current Model", "Optimized Model", "Custom Strategy"],
-    help="Select the business model to analyze"
+# Bank type selection
+bank_type = st.sidebar.selectbox(
+    "Select Bank Type",
+    ["Scheduled Commercial Banks (SCBs)", "Regional Rural Banks (RRBs)", "Cooperative Banks"],
+    help="Different bank types have different operational characteristics and baseline metrics"
 )
 
-# Market Scenario
-market_scenario = st.sidebar.selectbox(
-    "Market Scenario",
-    ["Conservative", "Realistic", "Aggressive", "Custom"],
-    index=1,
-    help="Choose market growth assumptions"
+# Input fields
+npa_rate = st.sidebar.slider(
+    "NPA Rate (%)",
+    min_value=0.0,
+    max_value=30.0,
+    value=14.16 if bank_type == "Scheduled Commercial Banks (SCBs)" else 7.1 if bank_type == "Regional Rural Banks (RRBs)" else 6.5,
+    step=0.1,
+    help="Non-Performing Assets rate as a percentage"
 )
 
-# Time Horizon
-time_horizon = st.sidebar.selectbox(
-    "Analysis Period",
-    ["1 Year", "3 Years", "5 Years", "10 Years"],
-    index=1,
-    help="Select analysis time horizon"
-)
-
-st.sidebar.markdown("---")
-st.sidebar.header("📊 Business Parameters")
-
-# Core Business Inputs
-num_farmers = st.sidebar.number_input(
-    "Number of Farmers",
-    min_value=1000,
+loan_amount = st.sidebar.number_input(
+    "KCC Loan Amount (₹)",
+    min_value=10000,
     max_value=10000000,
-    value=50000,
-    step=5000,
-    help="Current or target number of farmers"
+    value=120000,
+    step=10000,
+    help="Kisan Credit Card loan amount in Indian Rupees"
 )
 
-base_fee = st.sidebar.slider(
-    "Base Service Fee (₹)",
-    min_value=400,
-    max_value=2000,
-    value=800,
-    step=50,
-    help="Annual fee per farmer"
+interest_rate = st.sidebar.slider(
+    "Interest Rate (%)",
+    min_value=1.0,
+    max_value=15.0,
+    value=7.0,
+    step=0.1,
+    help="Annual interest rate for the KCC loan"
 )
 
-# Advanced Strategy Toggles
+# FarmerPay Analysis Toggle
 st.sidebar.markdown("---")
-st.sidebar.header("🚀 Strategy Enablers")
+st.sidebar.header("🚀 FarmerPay Analysis")
 
-enable_tiered_pricing = st.sidebar.checkbox("Tiered Pricing Strategy", value=True)
-enable_additional_services = st.sidebar.checkbox("Additional Revenue Streams", value=True)
-enable_cost_optimization = st.sidebar.checkbox("Cost Optimization", value=True)
-enable_partnership_optimization = st.sidebar.checkbox("Partnership Optimization", value=True)
-enable_scale_benefits = st.sidebar.checkbox("Economies of Scale", value=True)
+include_farmerpay = st.sidebar.checkbox(
+    "Include FarmerPay Analysis",
+    value=True,
+    help="Compare current state with FarmerPay integration benefits"
+)
 
-# Scenario-based parameters
-if market_scenario == "Conservative":
-    growth_rate = 0.25
-    market_penetration = 0.08
-    churn_rate = 0.15
-elif market_scenario == "Realistic":
-    growth_rate = 0.50
-    market_penetration = 0.15
-    churn_rate = 0.10
-elif market_scenario == "Aggressive":
-    growth_rate = 1.0
-    market_penetration = 0.25
-    churn_rate = 0.05
-else:  # Custom
-    growth_rate = st.sidebar.slider("Annual Growth Rate", 0.1, 2.0, 0.5, 0.1)
-    market_penetration = st.sidebar.slider("Market Penetration %", 0.05, 0.50, 0.15, 0.01)
-    churn_rate = st.sidebar.slider("Churn Rate %", 0.02, 0.30, 0.10, 0.01)
+# Number of farmers input - moved to top
+if include_farmerpay:
+    num_farmers = st.sidebar.number_input(
+        "Number of Farmers",
+        min_value=1000,
+        max_value=2500000,
+        value=10000,
+        step=1000,
+        help="Total number of farmers using FarmerPay services"
+    )
+    st.sidebar.markdown("---")
 
-# Business Logic Functions
-def calculate_cost_structure(farmers, enable_optimization=False, scale_benefits=False):
-    """Calculate cost per farmer based on optimizations"""
-    base_service_cost = 400
-    base_tech_cost = 100
+if include_farmerpay:
+    # Tiered Pricing Strategy
+    st.sidebar.subheader("💰 Tiered Pricing Strategy")
     
-    if enable_optimization:
-        # Cost optimization strategies
-        service_cost = base_service_cost * 0.75  # 25% reduction through automation
-        tech_cost = base_tech_cost * 0.80  # 20% reduction through efficiency
-    else:
-        service_cost = base_service_cost
-        tech_cost = base_tech_cost
+    # Basic tier settings
+    basic_tier_percentage = st.sidebar.slider(
+        "Basic Tier (% of users)",
+        min_value=40,
+        max_value=80,
+        value=60,
+        step=5,
+        help="Percentage of users in Basic tier (Core KCC services)"
+    )
     
-    if scale_benefits:
-        # Economies of scale
-        if farmers >= 100000:
-            service_cost *= 0.85
-            tech_cost *= 0.80
-        elif farmers >= 50000:
-            service_cost *= 0.90
-            tech_cost *= 0.85
-        elif farmers >= 25000:
-            service_cost *= 0.95
-            tech_cost *= 0.90
+    basic_tier_price = st.sidebar.slider(
+        "Basic Tier Price (₹)",
+        min_value=400,
+        max_value=800,
+        value=600,
+        step=20,
+        help="Annual fee for Basic tier - Core KCC services"
+    )
     
-    return service_cost + tech_cost
+    # Premium tier settings
+    premium_tier_percentage = st.sidebar.slider(
+        "Premium Tier (% of users)",
+        min_value=20,
+        max_value=40,
+        value=30,
+        step=5,
+        help="Percentage of users in Premium tier (Enhanced analytics + insurance)"
+    )
+    
+    premium_tier_price = st.sidebar.slider(
+        "Premium Tier Price (₹)",
+        min_value=800,
+        max_value=1400,
+        value=1000,
+        step=20,
+        help="Annual fee for Premium tier - Enhanced analytics + insurance"
+    )
+    
+    # Enterprise tier (calculated automatically)
+    enterprise_tier_percentage = 100 - basic_tier_percentage - premium_tier_percentage
+    
+    enterprise_tier_price = st.sidebar.slider(
+        "Enterprise Tier Price (₹)",
+        min_value=1200,
+        max_value=2000,
+        value=1500,
+        step=20,
+        help="Annual fee for Enterprise tier - Full financial ecosystem"
+    )
+    
+    st.sidebar.caption(f"Enterprise Tier: {enterprise_tier_percentage}% of users (auto-calculated)")
+    
+    # Calculate weighted average fee
+    farmerpay_fee = (
+        (basic_tier_percentage / 100) * basic_tier_price +
+        (premium_tier_percentage / 100) * premium_tier_price +
+        (enterprise_tier_percentage / 100) * enterprise_tier_price
+    )
+    
+    st.sidebar.metric("Weighted Average Fee", f"₹{farmerpay_fee:.0f}")
+    
+    # Additional Revenue Streams
+    st.sidebar.subheader("💼 Additional Revenue Streams")
+    
+    insurance_commission = st.sidebar.slider(
+        "Insurance Commissions (₹/farmer)",
+        min_value=100,
+        max_value=200,
+        value=150,
+        step=20,
+        help="Revenue from insurance product commissions per farmer"
+    )
+    
+    marketplace_commission = st.sidebar.slider(
+        "Input Marketplace Commissions (₹/farmer)",
+        min_value=150,
+        max_value=250,
+        value=200,
+        step=20,
+        help="Revenue from agricultural input marketplace commissions"
+    )
+    
+    data_analytics_revenue = st.sidebar.slider(
+        "Data Analytics Services (₹/farmer)",
+        min_value=80,
+        max_value=120,
+        value=100,
+        step=20,
+        help="Revenue from data analytics and insights services"
+    )
+    
+    credit_scoring_revenue = st.sidebar.slider(
+        "Credit Scoring Services (₹/farmer)",
+        min_value=60,
+        max_value=100,
+        value=80,
+        step=20,
+        help="Revenue from credit scoring and assessment services"
+    )
+    
+    weather_advisory_revenue = st.sidebar.slider(
+        "Weather Advisory (₹/farmer)",
+        min_value=30,
+        max_value=70,
+        value=50,
+        step=20,
+        help="Revenue from weather advisory and alerts services"
+    )
+    
+    training_programs_revenue = st.sidebar.slider(
+        "Training Programs (₹/farmer)",
+        min_value=100,
+        max_value=140,
+        value=120,
+        step=20,
+        help="Revenue from agricultural training and education programs"
+    )
+    
+    # Calculate total additional revenue
+    additional_revenue_per_farmer = (
+        insurance_commission + marketplace_commission + data_analytics_revenue +
+        credit_scoring_revenue + weather_advisory_revenue + training_programs_revenue
+    )
+    
+    st.sidebar.metric("Additional Revenue per Farmer", f"₹{additional_revenue_per_farmer:.0f}")
+    
+    # Total revenue per farmer (core + additional)
+    total_revenue_per_farmer = farmerpay_fee + additional_revenue_per_farmer
+    st.sidebar.metric("Total Revenue per Farmer", f"₹{total_revenue_per_farmer:.0f}")
+else:
+    # Set default values when FarmerPay analysis is not included
+    farmerpay_fee = 0
+    num_farmers = 0
+    total_revenue_per_farmer = 0
+    additional_revenue_per_farmer = 0
 
-def calculate_revenue_per_farmer(base_fee, enable_tiered=False, enable_additional=False):
-    """Calculate total revenue per farmer"""
-    if enable_tiered:
-        # Tiered pricing: 60% basic, 30% premium, 10% enterprise
-        basic_fee = base_fee * 0.75
-        premium_fee = base_fee * 1.25
-        enterprise_fee = base_fee * 1.875
-        
-        weighted_fee = (0.6 * basic_fee) + (0.3 * premium_fee) + (0.1 * enterprise_fee)
-    else:
-        weighted_fee = base_fee
-    
-    additional_revenue = 0
-    if enable_additional:
-        # Additional revenue streams
-        insurance_commission = 150
-        marketplace_commission = 200
-        data_services = 100
-        credit_scoring = 80
-        weather_services = 50
-        training_programs = 120
-        
-        additional_revenue = (insurance_commission + marketplace_commission + 
-                            data_services + credit_scoring + weather_services + training_programs)
-    
-    return weighted_fee + additional_revenue
 
-def calculate_partnership_rate(enable_optimization=False, farmers=10000):
-    """Calculate intermediary payment rate"""
-    base_rate = 0.30
+# Define bank-specific parameters
+def get_bank_parameters(bank_type, npa_rate, with_farmerpay=False):
+    """Get bank-specific parameters based on bank type and NPA rate"""
     
-    if enable_optimization:
-        if farmers >= 100000:
-            return 0.18  # Strategic partnerships
-        elif farmers >= 50000:
-            return 0.20  # Tiered model
-        elif farmers >= 25000:
-            return 0.22  # Performance-based
+    if bank_type == "Scheduled Commercial Banks (SCBs)":
+        if with_farmerpay:
+            # FarmerPay reduces NPA by 2% and improves efficiency
+            effective_npa = max(0, npa_rate - 2.0)
+            base_collection_efficiency = 90  # Improved from 80%
+            collection_efficiency = max(75, base_collection_efficiency - (effective_npa - 12.16) * 1.5)
+            
+            base_recovery_rate = 95  # Improved from 85%
+            recovery_rate = max(85, base_recovery_rate - (effective_npa - 12.16) * 1.2)
+            
+            operational_costs = 1105  # 15% reduction due to automation
+            other_revenue = 300  # Improved cross-selling
+            
         else:
-            return 0.25  # Improved terms
-    
-    return base_rate
-
-def calculate_business_metrics(farmers, revenue_per_farmer, cost_per_farmer, partnership_rate):
-    """Calculate all business metrics"""
-    total_revenue = farmers * revenue_per_farmer
-    total_costs = farmers * cost_per_farmer
-    gross_profit = total_revenue - total_costs
-    intermediary_payment = gross_profit * partnership_rate
-    net_profit = gross_profit - intermediary_payment
-    
-    profit_margin = (net_profit / total_revenue * 100) if total_revenue > 0 else 0
+            # Base collection efficiency decreases as NPA increases
+            base_collection_efficiency = 80
+            collection_efficiency = max(60, base_collection_efficiency - (npa_rate - 14.16) * 2)
+            
+            # Base recovery rate decreases as NPA increases
+            base_recovery_rate = 85
+            recovery_rate = max(70, base_recovery_rate - (npa_rate - 14.16) * 1.5)
+            
+            operational_costs = 1300
+            other_revenue = 248
+        
+    elif bank_type == "Regional Rural Banks (RRBs)":
+        if with_farmerpay:
+            # FarmerPay reduces NPA by 1.5%
+            effective_npa = max(0, npa_rate - 1.5)
+            base_collection_efficiency = 93  # Improved from 85%
+            collection_efficiency = max(80, base_collection_efficiency - (effective_npa - 5.6) * 1.5)
+            
+            base_recovery_rate = 98  # Improved from 90%
+            recovery_rate = max(88, base_recovery_rate - (effective_npa - 5.6) * 1.2)
+            
+            operational_costs = 900  # 10% reduction
+            other_revenue = 250  # Improved services
+            
+        else:
+            # Base collection efficiency
+            base_collection_efficiency = 85
+            collection_efficiency = max(70, base_collection_efficiency - (npa_rate - 7.1) * 2)
+            
+            # Base recovery rate
+            base_recovery_rate = 90
+            recovery_rate = max(75, base_recovery_rate - (npa_rate - 7.1) * 1.5)
+            
+            operational_costs = 1000
+            other_revenue = 198
+        
+    else:  # Cooperative Banks
+        if with_farmerpay:
+            # FarmerPay reduces NPA by 1%
+            effective_npa = max(0, npa_rate - 1.0)
+            base_collection_efficiency = 92  # Improved from 87%
+            collection_efficiency = max(77, base_collection_efficiency - (effective_npa - 5.5) * 1.5)
+            
+            base_recovery_rate = 100  # Perfect recovery with digital systems
+            recovery_rate = min(100, max(88, base_recovery_rate - (effective_npa - 5.5) * 1.2))
+            
+            operational_costs = 688  # 20% reduction through technology
+            other_revenue = 200  # Digital services expansion
+            
+        else:
+            # Base collection efficiency
+            base_collection_efficiency = 87
+            collection_efficiency = max(72, base_collection_efficiency - (npa_rate - 6.5) * 2)
+            
+            # Base recovery rate
+            base_recovery_rate = 88
+            recovery_rate = max(73, base_recovery_rate - (npa_rate - 6.5) * 1.5)
+            
+            operational_costs = 860
+            other_revenue = 148
     
     return {
-        'total_revenue': total_revenue,
-        'total_costs': total_costs,
-        'gross_profit': gross_profit,
-        'intermediary_payment': intermediary_payment,
-        'net_profit': net_profit,
-        'profit_margin': profit_margin,
-        'revenue_per_farmer': revenue_per_farmer,
-        'cost_per_farmer': cost_per_farmer
+        'collection_efficiency': collection_efficiency / 100,
+        'recovery_rate': recovery_rate / 100,
+        'operational_costs': operational_costs,
+        'other_revenue': other_revenue,
+        'effective_npa': effective_npa if with_farmerpay else npa_rate
     }
 
-def project_multi_year_growth(base_farmers, growth_rate, years, churn_rate):
-    """Project farmer growth over multiple years"""
-    farmers_projection = []
-    current_farmers = base_farmers
+# Calculate financial metrics
+def calculate_metrics(loan_amount, interest_rate, npa_rate, bank_params, farmerpay_fee=0):
+    """Calculate all financial metrics based on inputs"""
     
-    for year in range(years + 1):
-        if year == 0:
-            farmers_projection.append(current_farmers)
-        else:
-            # Apply growth and subtract churn
-            new_farmers = current_farmers * (1 + growth_rate) * (1 - churn_rate)
-            farmers_projection.append(int(new_farmers))
-            current_farmers = new_farmers
+    # Use effective NPA for provisioning calculations
+    effective_npa = bank_params.get('effective_npa', npa_rate)
     
-    return farmers_projection
+    # Interest Income
+    interest_income = (interest_rate / 100) * loan_amount * bank_params['collection_efficiency']
+    
+    # Government Subvention (1.5% standard rate)
+    govt_subvention = 0.015 * loan_amount * bank_params['recovery_rate']
+    
+    # Other Revenue
+    other_revenue = bank_params['other_revenue']
+    
+    # Total Revenue
+    total_revenue = interest_income + govt_subvention + other_revenue
+    
+    # Operational Costs
+    operational_costs = bank_params['operational_costs']
+    
+    # NPA Provisioning (Effective NPA% × 25% × Loan Amount)
+    npa_provisioning = (effective_npa / 100) * 0.25 * loan_amount
+    
+    # FarmerPay Fee (if applicable)
+    farmerpay_cost = farmerpay_fee
+    
+    # Total Costs
+    total_costs = operational_costs + npa_provisioning + farmerpay_cost
+    
+    # Net Profit
+    net_profit = total_revenue - total_costs
+    
+    return {
+        'interest_income': interest_income,
+        'govt_subvention': govt_subvention,
+        'other_revenue': other_revenue,
+        'total_revenue': total_revenue,
+        'operational_costs': operational_costs,
+        'npa_provisioning': npa_provisioning,
+        'farmerpay_fee': farmerpay_cost,
+        'total_costs': total_costs,
+        'net_profit': net_profit,
+        'collection_efficiency': bank_params['collection_efficiency'] * 100,
+        'recovery_rate': bank_params['recovery_rate'] * 100,
+        'effective_npa': effective_npa
+    }
 
-# Heavy calculation spinner
-with st.spinner("Calculating optimized metrics..."):
-    # Calculate Current State
-    current_cost_per_farmer = calculate_cost_structure(num_farmers)
-    current_revenue_per_farmer = calculate_revenue_per_farmer(base_fee)
-    current_partnership_rate = calculate_partnership_rate()
-    current_metrics = calculate_business_metrics(num_farmers, current_revenue_per_farmer, 
-                                               current_cost_per_farmer, current_partnership_rate)
+# Get bank parameters and calculate metrics
+bank_params = get_bank_parameters(bank_type, npa_rate)
+metrics = calculate_metrics(loan_amount, interest_rate, npa_rate, bank_params)
 
-    # Calculate Optimized State
-    optimized_cost_per_farmer = calculate_cost_structure(
-        num_farmers, enable_cost_optimization, enable_scale_benefits
-    )
-    optimized_revenue_per_farmer = calculate_revenue_per_farmer(
-        base_fee, enable_tiered_pricing, enable_additional_services
-    )
-    optimized_partnership_rate = calculate_partnership_rate(enable_partnership_optimization, num_farmers)
-    optimized_metrics = calculate_business_metrics(
-        num_farmers, optimized_revenue_per_farmer, optimized_cost_per_farmer, optimized_partnership_rate
-    )
+# FarmerPay analysis if enabled
+if include_farmerpay:
+    bank_params_fp = get_bank_parameters(bank_type, npa_rate, with_farmerpay=True)
+    metrics_fp = calculate_metrics(loan_amount, interest_rate, npa_rate, bank_params_fp, farmerpay_fee)
+else:
+    # Set default values when FarmerPay is not enabled
+    farmerpay_fee = 0
+    metrics_fp = None
+    bank_params_fp = None
 
-# Success Lottie animation after optimization
-success_lottie_url = "https://assets2.lottiefiles.com/private_files/lf30_ydo1amjm.json"
-success_lottie = load_lottieurl(success_lottie_url)
-if success_lottie:
-    st_lottie(success_lottie, speed=1, height=100, key="success_animation")
-st.success("Optimizations applied successfully!")
+# Main content area - Two prominent sections
+st.markdown("---")
 
-# Main Dashboard
-col1, col2 = st.columns([2, 1])
+# Section 1: Bank Analysis
+st.header("🏦 BANK PROFITABILITY ANALYSIS")
 
-with col1:
-    st.header("📊 Business Performance Dashboard")
+if include_farmerpay:
+    st.subheader("📊 Current vs FarmerPay Comparison")
     
-    # Key Metrics Comparison
-    metrics_col1, metrics_col2, metrics_col3, metrics_col4 = st.columns(4)
-    
-    with metrics_col1:
-        profit_improvement = optimized_metrics['net_profit'] - current_metrics['net_profit']
-        st.metric(
-            "Net Profit",
-            f"₹{optimized_metrics['net_profit']/10000000:.1f} Cr",
-            delta=f"₹{profit_improvement/10000000:.1f} Cr",
-            help="Annual net profit with optimizations"
-        )
-    
-    with metrics_col2:
-        margin_improvement = optimized_metrics['profit_margin'] - current_metrics['profit_margin']
-        st.metric(
-            "Profit Margin",
-            f"{optimized_metrics['profit_margin']:.1f}%",
-            delta=f"{margin_improvement:.1f}%",
-            help="Profit as percentage of revenue"
-        )
-    
-    with metrics_col3:
-        revenue_improvement = optimized_metrics['total_revenue'] - current_metrics['total_revenue']
-        st.metric(
-            "Total Revenue",
-            f"₹{optimized_metrics['total_revenue']/10000000:.1f} Cr",
-            delta=f"₹{revenue_improvement/10000000:.1f} Cr",
-            help="Annual revenue with all strategies"
-        )
-    
-    with metrics_col4:
-        partnership_improvement = (current_partnership_rate - optimized_partnership_rate) * 100
-        st.metric(
-            "Partnership Rate",
-            f"{optimized_partnership_rate*100:.1f}%",
-            delta=f"-{partnership_improvement:.1f}%",
-            help="Intermediary payment rate"
-        )
-
-with col2:
-    st.subheader("🎯 Strategy Impact")
-    
-    # Strategy impact breakdown
-    impact_data = []
-    
-    if enable_cost_optimization:
-        cost_savings = (current_cost_per_farmer - optimized_cost_per_farmer) * num_farmers
-        impact_data.append({"Strategy": "Cost Optimization", "Impact": cost_savings/10000000})
-    
-    if enable_tiered_pricing or enable_additional_services:
-        revenue_increase = (optimized_revenue_per_farmer - current_revenue_per_farmer) * num_farmers
-        impact_data.append({"Strategy": "Revenue Enhancement", "Impact": revenue_increase/10000000})
-    
-    if enable_partnership_optimization:
-        partnership_savings = (current_partnership_rate - optimized_partnership_rate) * optimized_metrics['gross_profit']
-        impact_data.append({"Strategy": "Partnership Optimization", "Impact": partnership_savings/10000000})
-    
-    if impact_data:
-        impact_df = pd.DataFrame(impact_data)
-        fig_impact = px.bar(impact_df, x="Strategy", y="Impact", 
-                           title="Strategy Impact (₹ Cr)",
-                           color="Impact",
-                           color_continuous_scale="viridis")
-        fig_impact.update_layout(height=300, showlegend=False)
-        st.plotly_chart(fig_impact, use_container_width=True)
-
-# Detailed Analysis Tabs
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📈 Financial Analysis", 
-    "🚀 Strategic Roadmap", 
-    "📊 Market Scenarios", 
-    "💰 Investment Analysis",
-    "🎯 Competitive Intelligence"
-])
-
-with tab1:
-    st.subheader("📈 Comprehensive Financial Analysis")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        # Revenue breakdown
-        revenue_data = {
-            'Component': ['Base Fees', 'Premium Tiers', 'Additional Services'],
-            'Current': [
-                current_revenue_per_farmer * num_farmers,
-                0,
-                0
-            ],
-            'Optimized': [
-                base_fee * num_farmers * (0.6 * 0.75 + 0.3 * 1.25 + 0.1 * 1.875) if enable_tiered_pricing else base_fee * num_farmers,
-                0 if not enable_tiered_pricing else (base_fee * num_farmers * 0.4 * 0.5),
-                0 if not enable_additional_services else num_farmers * 700
-            ]
-        }
-        
-        revenue_df = pd.DataFrame(revenue_data)
-        fig_revenue = px.bar(revenue_df, x='Component', y=['Current', 'Optimized'],
-                           title="Revenue Breakdown (₹)",
-                           barmode='group')
-        st.plotly_chart(fig_revenue, use_container_width=True)
-    
-    with col2:
-        # Cost breakdown
-        cost_data = {
-            'Component': ['Service Costs', 'Technology Costs', 'Partnership Payments'],
-            'Current': [
-                400 * num_farmers,
-                100 * num_farmers,
-                current_metrics['intermediary_payment']
-            ],
-            'Optimized': [
-                (400 * 0.75 if enable_cost_optimization else 400) * num_farmers,
-                (100 * 0.80 if enable_cost_optimization else 100) * num_farmers,
-                optimized_metrics['intermediary_payment']
-            ]
-        }
-        
-        cost_df = pd.DataFrame(cost_data)
-        fig_costs = px.bar(cost_df, x='Component', y=['Current', 'Optimized'],
-                          title="Cost Breakdown (₹)",
-                          barmode='group',
-                          color_discrete_map={'Current': '#ff7f7f', 'Optimized': '#90EE90'})
-        st.plotly_chart(fig_costs, use_container_width=True)
-    
-    # Financial projection table
-    st.subheader("📋 Financial Summary")
-    
-    financial_summary = {
-        'Metric': [
-            'Revenue per Farmer',
-            'Cost per Farmer',
-            'Gross Profit per Farmer',
-            'Net Profit per Farmer',
+    # Create comparison table
+    comparison_data = {
+        'Revenue/Cost Item': [
+            'Interest Income',
+            'Government Subvention', 
+            'Other Revenue',
             'Total Revenue',
+            'Operational Costs',
+            'NPA Provisioning',
+            'FarmerPay Fee',
             'Total Costs',
-            'Total Net Profit',
-            'Profit Margin',
-            'ROI on Investment'
+            'Net Profit per KCC'
         ],
-        'Current Model': [
-            f"₹{current_revenue_per_farmer:,.0f}",
-            f"₹{current_cost_per_farmer:,.0f}",
-            f"₹{current_revenue_per_farmer - current_cost_per_farmer:,.0f}",
-            f"₹{current_metrics['net_profit']/num_farmers:,.0f}",
-            f"₹{current_metrics['total_revenue']/10000000:.1f} Cr",
-            f"₹{current_metrics['total_costs']/10000000:.1f} Cr",
-            f"₹{current_metrics['net_profit']/10000000:.1f} Cr",
-            f"{current_metrics['profit_margin']:.1f}%",
-            f"{(current_metrics['net_profit']/100000000)*100:.1f}%"
+        'Current State (₹)': [
+            f"₹{metrics['interest_income']:,.0f}",
+            f"₹{metrics['govt_subvention']:,.0f}",
+            f"₹{metrics['other_revenue']:,.0f}",
+            f"₹{metrics['total_revenue']:,.0f}",
+            f"₹{metrics['operational_costs']:,.0f}",
+            f"₹{metrics['npa_provisioning']:,.0f}",
+            "₹0",
+            f"₹{metrics['total_costs']:,.0f}",
+            f"₹{metrics['net_profit']:,.0f}"
         ],
-        'Optimized Model': [
-            f"₹{optimized_revenue_per_farmer:,.0f}",
-            f"₹{optimized_cost_per_farmer:,.0f}",
-            f"₹{optimized_revenue_per_farmer - optimized_cost_per_farmer:,.0f}",
-            f"₹{optimized_metrics['net_profit']/num_farmers:,.0f}",
-            f"₹{optimized_metrics['total_revenue']/10000000:.1f} Cr",
-            f"₹{optimized_metrics['total_costs']/10000000:.1f} Cr",
-            f"₹{optimized_metrics['net_profit']/10000000:.1f} Cr",
-            f"{optimized_metrics['profit_margin']:.1f}%",
-            f"{(optimized_metrics['net_profit']/100000000)*100:.1f}%"
+        'With FarmerPay (₹)': [
+            f"₹{metrics_fp['interest_income']:,.0f}",
+            f"₹{metrics_fp['govt_subvention']:,.0f}",
+            f"₹{metrics_fp['other_revenue']:,.0f}",
+            f"₹{metrics_fp['total_revenue']:,.0f}",
+            f"₹{metrics_fp['operational_costs']:,.0f}",
+            f"₹{metrics_fp['npa_provisioning']:,.0f}",
+            f"₹{farmerpay_fee:,.0f}",
+            f"₹{metrics_fp['total_costs']:,.0f}",
+            f"₹{metrics_fp['net_profit']:,.0f}"
         ],
-        'Improvement': [
-            f"₹{optimized_revenue_per_farmer - current_revenue_per_farmer:+,.0f}",
-            f"₹{optimized_cost_per_farmer - current_cost_per_farmer:+,.0f}",
-            f"₹{(optimized_revenue_per_farmer - optimized_cost_per_farmer) - (current_revenue_per_farmer - current_cost_per_farmer):+,.0f}",
-            f"₹{(optimized_metrics['net_profit'] - current_metrics['net_profit'])/num_farmers:+,.0f}",
-            f"₹{(optimized_metrics['total_revenue'] - current_metrics['total_revenue'])/10000000:+.1f} Cr",
-            f"₹{(optimized_metrics['total_costs'] - current_metrics['total_costs'])/10000000:+.1f} Cr",
-            f"₹{(optimized_metrics['net_profit'] - current_metrics['net_profit'])/10000000:+.1f} Cr",
-            f"{optimized_metrics['profit_margin'] - current_metrics['profit_margin']:+.1f}%",
-            f"{((optimized_metrics['net_profit'] - current_metrics['net_profit'])/100000000)*100:+.1f}%"
+        'Change (₹)': [
+            f"₹{metrics_fp['interest_income'] - metrics['interest_income']:+,.0f}",
+            f"₹{metrics_fp['govt_subvention'] - metrics['govt_subvention']:+,.0f}",
+            f"₹{metrics_fp['other_revenue'] - metrics['other_revenue']:+,.0f}",
+            f"₹{metrics_fp['total_revenue'] - metrics['total_revenue']:+,.0f}",
+            f"₹{metrics_fp['operational_costs'] - metrics['operational_costs']:+,.0f}",
+            f"₹{metrics_fp['npa_provisioning'] - metrics['npa_provisioning']:+,.0f}",
+            f"₹{farmerpay_fee:+,.0f}",
+            f"₹{metrics_fp['total_costs'] - metrics['total_costs']:+,.0f}",
+            f"₹{metrics_fp['net_profit'] - metrics['net_profit']:+,.0f}"
         ]
     }
     
-    summary_df = pd.DataFrame(financial_summary)
-    st.dataframe(summary_df, use_container_width=True, hide_index=True)
-
-with tab2:
-    st.subheader("🚀 Strategic Implementation Roadmap")
+    comparison_df = pd.DataFrame(comparison_data)
+    st.dataframe(comparison_df, use_container_width=True, hide_index=True)
     
-    # Implementation phases
-    years = int(time_horizon.split()[0])
+    # Bank Key Metrics with Profit Margins
+    st.subheader("📊 Bank Key Metrics")
     
-    st.markdown('<div class="phase-header">Phase 1: Quick Wins (0-6 months)</div>', unsafe_allow_html=True)
+    # Calculate profit margins
+    current_profit_margin = (metrics['net_profit'] / metrics['total_revenue'] * 100) if metrics['total_revenue'] > 0 else 0
+    fp_profit_margin = (metrics_fp['net_profit'] / metrics_fp['total_revenue'] * 100) if metrics_fp['total_revenue'] > 0 else 0
     
-    phase1_col1, phase1_col2, phase1_col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
-    with phase1_col1:
-        st.metric("Target Farmers", f"{num_farmers:,}")
-        st.metric("Expected Revenue", f"₹{optimized_metrics['total_revenue']/10000000:.1f} Cr")
-    
-    with phase1_col2:
-        st.metric("Investment Required", "₹2.0 Cr")
-        st.metric("Payback Period", "8.5 months")
-    
-    with phase1_col3:
-        st.metric("ROI", "47.1%")
-        st.metric("Risk Level", "Low")
-    
-    # Phase initiatives
-    st.markdown("**Key Initiatives:**")
-    initiatives = [
-        "✅ Deploy AI-powered customer service automation",
-        "✅ Implement tiered pricing strategy",
-        "✅ Renegotiate partnership terms",
-        "✅ Launch additional revenue streams",
-        "✅ Optimize operational costs"
-    ]
-    
-    for initiative in initiatives:
-        st.markdown(initiative)
-    
-    st.markdown('<div class="phase-header">Phase 2: Scale & Diversify (6-18 months)</div>', unsafe_allow_html=True)
-    
-    phase2_farmers = int(num_farmers * 2.5)
-    phase2_metrics = calculate_business_metrics(
-        phase2_farmers, 
-        optimized_revenue_per_farmer * 1.1,  # 10% premium for scale
-        optimized_cost_per_farmer * 0.95,    # 5% cost reduction
-        optimized_partnership_rate * 0.9     # 10% better terms
-    )
-    
-    phase2_col1, phase2_col2, phase2_col3 = st.columns(3)
-    
-    with phase2_col1:
-        st.metric("Target Farmers", f"{phase2_farmers:,}")
-        st.metric("Expected Revenue", f"₹{phase2_metrics['total_revenue']/10000000:.1f} Cr")
-    
-    with phase2_col2:
-        st.metric("Investment Required", "₹5.0 Cr")
-        st.metric("Expected Profit", f"₹{phase2_metrics['net_profit']/10000000:.1f} Cr")
-    
-    with phase2_col3:
-        st.metric("Market Share", f"{phase2_farmers/7000000*100:.1f}%")
-        st.metric("Risk Level", "Medium")
-    
-    st.markdown('<div class="phase-header">Phase 3: Market Leadership (18-36 months)</div>', unsafe_allow_html=True)
-    
-    phase3_farmers = int(num_farmers * 5)
-    phase3_metrics = calculate_business_metrics(
-        phase3_farmers,
-        optimized_revenue_per_farmer * 1.3,  # 30% premium for advanced services
-        optimized_cost_per_farmer * 0.85,    # 15% cost reduction through scale
-        optimized_partnership_rate * 0.8     # 20% better terms
-    )
-    
-    phase3_col1, phase3_col2, phase3_col3 = st.columns(3)
-    
-    with phase3_col1:
-        st.metric("Target Farmers", f"{phase3_farmers:,}")
-        st.metric("Expected Revenue", f"₹{phase3_metrics['total_revenue']/10000000:.1f} Cr")
-    
-    with phase3_col2:
-        st.metric("Investment Required", "₹15.0 Cr")
-        st.metric("Expected Profit", f"₹{phase3_metrics['net_profit']/10000000:.1f} Cr")
-    
-    with phase3_col3:
-        st.metric("Market Share", f"{phase3_farmers/7000000*100:.1f}%")
-        st.metric("Valuation Target", f"₹{phase3_metrics['total_revenue']*8/10000000:.0f} Cr")
-
-with tab3:
-    st.subheader("📊 Market Scenario Analysis")
-    
-    # Multi-year projections
-    farmer_projections = project_multi_year_growth(num_farmers, growth_rate, years, churn_rate)
-    projection_data = []
-    cumulative_investment = 0
-    investment_schedule = [0, 20000000, 50000000, 150000000, 200000000]  # Investment by year
-    
-    for year, farmers in enumerate(farmer_projections):
-        if year < len(investment_schedule):
-            cumulative_investment += investment_schedule[year]
-        
-        year_revenue_per_farmer = optimized_revenue_per_farmer * (1.05 ** year)  # 5% annual increase
-        year_cost_per_farmer = optimized_cost_per_farmer * (0.98 ** year)  # 2% annual decrease
-        year_partnership_rate = max(0.15, optimized_partnership_rate * (0.95 ** year))  # Improving terms
-        
-        year_metrics = calculate_business_metrics(farmers, year_revenue_per_farmer, 
-                                                year_cost_per_farmer, year_partnership_rate)
-        
-        projection_data.append({
-            'Year': year,
-            'Farmers': farmers,
-            'Revenue': year_metrics['total_revenue'],
-            'Profit': year_metrics['net_profit'],
-            'Profit_Margin': year_metrics['profit_margin'],
-            'Cumulative_Investment': cumulative_investment,
-            'ROI': (year_metrics['net_profit'] / cumulative_investment * 100) if cumulative_investment > 0 else 0
-        })
-    
-    projection_df = pd.DataFrame(projection_data)
-    
-    # Animated Plotly Farmer Growth Chart
-    farmer_projection_df = pd.DataFrame({
-        'Year': list(range(years+1)),
-        'Farmers': farmer_projections,
-    })
-
-    fig = px.bar(
-        farmer_projection_df,
-        x="Year",
-        y="Farmers",
-        animation_frame="Year",
-        range_y=[0, max(farmer_projections)*1.2],
-        title="Animated Farmer Growth"
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Growth charts (financial)
-    col1, col2 = st.columns(2)
     with col1:
-        fig_financial = go.Figure()
-        fig_financial.add_trace(go.Scatter(x=projection_df['Year'], y=projection_df['Revenue']/10000000,
-                                         mode='lines+markers', name='Revenue (₹ Cr)',
-                                         line=dict(color='green', width=3)))
-        fig_financial.add_trace(go.Scatter(x=projection_df['Year'], y=projection_df['Profit']/10000000,
-                                         mode='lines+markers', name='Profit (₹ Cr)',
-                                         line=dict(color='orange', width=3)))
-        fig_financial.update_layout(title="Financial Growth Projection",
-                                   xaxis_title="Year", yaxis_title="Amount (₹ Cr)")
-        st.plotly_chart(fig_financial, use_container_width=True)
+        st.metric(
+            "Current Net Profit",
+            f"₹{metrics['net_profit']:,.0f}",
+            help="Bank's current profit per KCC account"
+        )
+        st.metric(
+            "Current Profit Margin",
+            f"{current_profit_margin:.1f}%",
+            help="Current profit as percentage of revenue"
+        )
     
-    # Scenario comparison table
-    st.subheader("🔍 Scenario Comparison")
+    with col2:
+        st.metric(
+            "With FarmerPay Profit",
+            f"₹{metrics_fp['net_profit']:,.0f}",
+            delta=f"₹{metrics_fp['net_profit'] - metrics['net_profit']:+,.0f}",
+            help="Bank's profit with FarmerPay integration"
+        )
+        st.metric(
+            "FarmerPay Profit Margin",
+            f"{fp_profit_margin:.1f}%",
+            delta=f"{fp_profit_margin - current_profit_margin:+.1f}%",
+            help="Profit margin with FarmerPay integration"
+        )
     
-    scenarios = ['Conservative', 'Realistic', 'Aggressive']
-    scenario_params = {
-        'Conservative': {'growth': 0.25, 'penetration': 0.08, 'churn': 0.15},
-        'Realistic': {'growth': 0.50, 'penetration': 0.15, 'churn': 0.10},
-        'Aggressive': {'growth': 1.0, 'penetration': 0.25, 'churn': 0.05}
+    with col3:
+        bank_roi = ((metrics_fp['net_profit'] - metrics['net_profit']) / farmerpay_fee * 100) if farmerpay_fee > 0 else 0
+        st.metric(
+            "Bank ROI on FarmerPay",
+            f"{bank_roi:.0f}%",
+            help="Bank's return on FarmerPay investment"
+        )
+        
+        break_even_months = farmerpay_fee / ((metrics_fp['net_profit'] - metrics['net_profit']) / 12) if (metrics_fp['net_profit'] - metrics['net_profit']) > 0 else float('inf')
+        st.metric(
+            "Break-Even Period",
+            f"{break_even_months:.1f} months" if break_even_months < 24 else "24+ months",
+            help="Time to recover FarmerPay investment"
+        )
+    
+    with col4:
+        revenue_improvement = ((metrics_fp['total_revenue'] / metrics['total_revenue'] - 1) * 100) if metrics['total_revenue'] > 0 else 0
+        st.metric(
+            "Revenue Improvement",
+            f"{revenue_improvement:.1f}%",
+            help="Percentage increase in total revenue"
+        )
+        
+        npa_reduction = npa_rate - metrics_fp['effective_npa']
+        st.metric(
+            "NPA Reduction",
+            f"{npa_reduction:.1f}%",
+            help="Reduction in effective NPA rate"
+        )
+    
+    # Bank's Profit Analysis with FarmerPay App
+    st.subheader("🏦 Bank's Profit Analysis with FarmerPay App")
+    st.caption(f"Analysis for {num_farmers:,} farmers with ₹{farmerpay_fee:,} FarmerPay fee per farmer")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    # Calculate value components
+    revenue_increase = metrics_fp['total_revenue'] - metrics['total_revenue']
+    cost_reduction = metrics['operational_costs'] - metrics_fp['operational_costs']
+    provisioning_savings = metrics['npa_provisioning'] - metrics_fp['npa_provisioning']
+    net_value = metrics_fp['net_profit'] - metrics['net_profit']
+    
+    with col1:
+        st.metric(
+            "Revenue Increase", 
+            f"₹{revenue_increase:,.0f}",
+            help="Additional revenue from improved collection and recovery rates"
+        )
+        st.metric(
+            "Cost Reduction", 
+            f"₹{cost_reduction:,.0f}",
+            help="Savings from operational efficiency and automation"
+        )
+    
+    with col2:
+        st.metric(
+            "Provisioning Savings", 
+            f"₹{provisioning_savings:,.0f}",
+            help="Reduced NPA provisioning due to lower effective NPA rate"
+        )
+        st.metric(
+            "FarmerPay Fee", 
+            f"₹{farmerpay_fee:,.0f}",
+            help="Annual service fee charged by FarmerPay"
+        )
+    
+    with col3:
+        st.metric(
+            "Net Value Addition", 
+            f"₹{net_value:,.0f}",
+            delta=f"{((net_value / abs(metrics['net_profit'])) * 100 if metrics['net_profit'] != 0 else 0):.1f}% improvement"
+        )
+        
+        # ROI calculation
+        roi = ((net_value / farmerpay_fee) * 100) if farmerpay_fee > 0 else 0
+        st.metric(
+            "Bank's FarmerPay ROI", 
+            f"{roi:.0f}%",
+            help="Bank's Return on Investment for FarmerPay service"
+        )
+    
+    # Break-even analysis
+    st.subheader("⏱️ Break-Even Analysis")
+    monthly_net_value = net_value / 12
+    break_even_months = farmerpay_fee / monthly_net_value if monthly_net_value > 0 else float('inf')
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Monthly Net Value", f"₹{monthly_net_value:,.0f}")
+    with col2:
+        st.metric("Annual Fee", f"₹{farmerpay_fee:,.0f}")
+    with col3:
+        if break_even_months < 12:
+            st.metric("Break-Even Period", f"{break_even_months:.1f} months")
+        else:
+            st.metric("Break-Even Period", "Not achievable within 1 year", delta_color="inverse")
+    
+else:
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.header("📈 Financial Analysis Results")
+        
+        # Create detailed results table
+        results_data = {
+            'Revenue/Cost Item': [
+                'Interest Income',
+                'Government Subvention',
+                'Other Revenue',
+                'Total Revenue',
+                'Operational Costs',
+                'NPA Provisioning',
+                'Total Costs',
+                'Net Profit per KCC'
+            ],
+            'Calculation Method': [
+                f"{interest_rate}% × ₹{loan_amount:,} × {metrics['collection_efficiency']:.1f}% collection efficiency",
+                f"1.5% × ₹{loan_amount:,} × {metrics['recovery_rate']:.1f}% recovery rate",
+                "Insurance + Cross-selling",
+                "Sum of all revenue items",
+                "Staff + Infrastructure + Collection",
+                f"{npa_rate}% × 25% × ₹{loan_amount:,}",
+                "Operational + NPA Provisioning",
+                "Total Revenue - Total Costs"
+            ],
+            'Annual Amount (₹)': [
+                f"₹{metrics['interest_income']:,.0f}",
+                f"₹{metrics['govt_subvention']:,.0f}",
+                f"₹{metrics['other_revenue']:,.0f}",
+                f"₹{metrics['total_revenue']:,.0f}",
+                f"₹{metrics['operational_costs']:,.0f}",
+                f"₹{metrics['npa_provisioning']:,.0f}",
+                f"₹{metrics['total_costs']:,.0f}",
+                f"₹{metrics['net_profit']:,.0f}"
+            ]
+        }
+        
+        results_df = pd.DataFrame(results_data)
+        st.dataframe(results_df, use_container_width=True, hide_index=True)
+
+    with col2:
+        st.subheader("📊 Bank Key Metrics")
+        
+        # Display key metrics in metric cards
+        st.metric("Net Profit per KCC", f"₹{metrics['net_profit']:,.0f}")
+        st.metric("Total Revenue", f"₹{metrics['total_revenue']:,.0f}")
+        st.metric("Total Costs", f"₹{metrics['total_costs']:,.0f}")
+        st.metric("NPA Provisioning", f"₹{metrics['npa_provisioning']:,.0f}")
+        
+        # Profit margin calculation
+        profit_margin = (metrics['net_profit'] / metrics['total_revenue']) * 100 if metrics['total_revenue'] > 0 else 0
+        st.metric("Bank Profit Margin", f"{profit_margin:.1f}%")
+
+# Section 2: FarmerPay Business Analysis (only shown when enabled)
+if include_farmerpay:
+    st.markdown("---")
+    st.header("🚀 FARMERPAY BUSINESS ANALYSIS")
+
+    # FarmerPay Cost Structure (as per specifications)
+    service_cost_per_farmer = 400  # ₹400 per farmer
+    technology_opex_per_farmer = 100  # ₹100 per farmer
+    total_direct_cost_per_farmer = service_cost_per_farmer + technology_opex_per_farmer  # ₹500 per farmer
+    
+    # Calculate FarmerPay's financials
+    farmerpay_annual_revenue = num_farmers * total_revenue_per_farmer
+    farmerpay_direct_costs = num_farmers * total_direct_cost_per_farmer
+    farmerpay_gross_profit = farmerpay_annual_revenue - farmerpay_direct_costs
+    
+    # Intermediary payment: 30% of gross profit (only if gross profit is positive)
+    if farmerpay_gross_profit > 0:
+        intermediary_payment = farmerpay_gross_profit * 0.30
+    else:
+        intermediary_payment = 0
+    
+    # FarmerPay's net profit
+    farmerpay_net_profit = farmerpay_gross_profit - intermediary_payment
+    
+    # FarmerPay profit margin
+    farmerpay_profit_margin = (farmerpay_net_profit / farmerpay_annual_revenue * 100) if farmerpay_annual_revenue > 0 else 0
+    
+    # FarmerPay's ROI (assuming initial investment for platform development)
+    # Estimate platform development cost based on scale
+    if num_farmers <= 10000:
+        platform_investment = 50000000  # ₹5 Cr for smaller scale
+    elif num_farmers <= 100000:
+        platform_investment = 100000000  # ₹10 Cr for medium scale
+    else:
+        platform_investment = 200000000  # ₹20 Cr for large scale
+    
+    farmerpay_roi = ((farmerpay_net_profit / platform_investment) * 100) if platform_investment > 0 else 0
+    
+    # Display Tiered Pricing Strategy
+    st.subheader("💰 Tiered Pricing Strategy")
+    
+    pricing_breakdown_data = {
+        'Tier': ['Basic', 'Premium', 'Enterprise'],
+        'User %': [f"{basic_tier_percentage}%", f"{premium_tier_percentage}%", f"{enterprise_tier_percentage}%"],
+        'Price per User (₹)': [f"₹{basic_tier_price:,}", f"₹{premium_tier_price:,}", f"₹{enterprise_tier_price:,}"],
+        'Users': [
+            f"{(basic_tier_percentage/100) * num_farmers:,.0f}",
+            f"{(premium_tier_percentage/100) * num_farmers:,.0f}",
+            f"{(enterprise_tier_percentage/100) * num_farmers:,.0f}"
+        ],
+        'Revenue (₹ Cr)': [
+            f"₹{(basic_tier_percentage/100) * num_farmers * basic_tier_price / 10000000:.1f}",
+            f"₹{(premium_tier_percentage/100) * num_farmers * premium_tier_price / 10000000:.1f}",
+            f"₹{(enterprise_tier_percentage/100) * num_farmers * enterprise_tier_price / 10000000:.1f}"
+        ],
+        'Services': [
+            'Core KCC services',
+            'Enhanced analytics + insurance',
+            'Full financial ecosystem'
+        ]
     }
     
-    scenario_results = []
-    for scenario in scenarios:
-        params = scenario_params[scenario]
-        final_farmers = num_farmers * ((1 + params['growth']) ** years) * (1 - params['churn'])
-        final_revenue = final_farmers * optimized_revenue_per_farmer * (1.05 ** years)
-        final_profit = final_revenue * (optimized_metrics['profit_margin'] / 100)
-        market_share = final_farmers / 70000000  # Total addressable market
+    pricing_breakdown_df = pd.DataFrame(pricing_breakdown_data)
+    st.dataframe(pricing_breakdown_df, use_container_width=True, hide_index=True)
+    
+    # Display Additional Revenue Streams
+    st.subheader("💼 Additional Revenue Streams")
+    
+    additional_revenue_data = {
+        'Revenue Stream': [
+            'Insurance Commissions',
+            'Input Marketplace Commissions',
+            'Data Analytics Services',
+            'Credit Scoring Services',
+            'Weather Advisory',
+            'Training Programs'
+        ],
+        'Per Farmer (₹)': [
+            f"₹{insurance_commission:,}",
+            f"₹{marketplace_commission:,}",
+            f"₹{data_analytics_revenue:,}",
+            f"₹{credit_scoring_revenue:,}",
+            f"₹{weather_advisory_revenue:,}",
+            f"₹{training_programs_revenue:,}"
+        ],
+        'Total Revenue (₹ Cr)': [
+            f"₹{num_farmers * insurance_commission / 10000000:.1f}",
+            f"₹{num_farmers * marketplace_commission / 10000000:.1f}",
+            f"₹{num_farmers * data_analytics_revenue / 10000000:.1f}",
+            f"₹{num_farmers * credit_scoring_revenue / 10000000:.1f}",
+            f"₹{num_farmers * weather_advisory_revenue / 10000000:.1f}",
+            f"₹{num_farmers * training_programs_revenue / 10000000:.1f}"
+        ]
+    }
+    
+    additional_revenue_df = pd.DataFrame(additional_revenue_data)
+    st.dataframe(additional_revenue_df, use_container_width=True, hide_index=True)
+    
+    # Display FarmerPay cost breakdown
+    st.subheader("💰 FarmerPay Cost Structure")
+    
+    total_costs = farmerpay_direct_costs + intermediary_payment
+    
+    cost_breakdown_data = {
+        'Cost Component': [
+            'Service Cost per Farmer',
+            'Technology OPEX per Farmer', 
+            'Total Direct Cost per Farmer',
+            'Total Direct Costs (All Farmers)',
+            'Intermediary Payment (30% of Gross Profit)',
+            'Total Costs'
+        ],
+        'Per Farmer (₹)': [
+            f"₹{service_cost_per_farmer:,}",
+            f"₹{technology_opex_per_farmer:,}",
+            f"₹{total_direct_cost_per_farmer:,}",
+            f"₹{total_direct_cost_per_farmer:,}",
+            f"₹{intermediary_payment / num_farmers:,.0f}",
+            f"₹{total_costs / num_farmers:,.0f}"
+        ],
+        'Total Amount (₹)': [
+            f"₹{num_farmers * service_cost_per_farmer / 10000000:.1f} Cr",
+            f"₹{num_farmers * technology_opex_per_farmer / 10000000:.1f} Cr",
+            f"₹{farmerpay_direct_costs / 10000000:.1f} Cr",
+            f"₹{farmerpay_direct_costs / 10000000:.1f} Cr",
+            f"₹{intermediary_payment / 10000000:.1f} Cr",
+            f"₹{total_costs / 10000000:.1f} Cr"
+        ]
+    }
+    
+    cost_breakdown_df = pd.DataFrame(cost_breakdown_data)
+    st.dataframe(cost_breakdown_df, use_container_width=True, hide_index=True)
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            "Annual Revenue",
+            f"₹{farmerpay_annual_revenue / 10000000:.1f} Cr",
+            help=f"₹{farmerpay_annual_revenue:,} ({num_farmers:,} farmers × ₹{total_revenue_per_farmer:,})"
+        )
+        st.caption(f"Core: ₹{farmerpay_fee:.0f} + Additional: ₹{additional_revenue_per_farmer:.0f}")
+    
+    with col2:
+        st.metric(
+            "Gross Profit",
+            f"₹{farmerpay_gross_profit / 10000000:.1f} Cr",
+            help=f"₹{farmerpay_gross_profit:,} (Revenue - Direct Costs)"
+        )
+    
+    with col3:
+        st.metric(
+            "Net Profit",
+            f"₹{farmerpay_net_profit / 10000000:.1f} Cr",
+            help=f"₹{farmerpay_net_profit:,} (After intermediary payment)"
+        )
+    
+    with col4:
+        st.metric(
+            "Profit Margin",
+            f"{farmerpay_profit_margin:.1f}%",
+            help="Net Profit as percentage of Revenue"
+        )
+    
+    # ROI Analysis
+    st.subheader("📈 FarmerPay ROI Analysis")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.metric(
+            "Platform Investment",
+            f"₹{platform_investment / 10000000:.0f} Cr",
+            help="Initial investment for platform development"
+        )
+    
+    with col2:
+        st.metric(
+            "Annual ROI",
+            f"{farmerpay_roi:.1f}%",
+            help="Return on Investment based on annual net profit"
+        )
+    
+    # Market penetration analysis
+    st.subheader("📊 Market Impact Analysis")
+    
+    # Total value created in the ecosystem
+    total_bank_value_addition = net_value * num_farmers
+    ecosystem_value = farmerpay_net_profit + total_bank_value_addition
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric(
+            "Total Bank Value Addition",
+            f"₹{total_bank_value_addition / 10000000:.1f} Cr",
+            help=f"₹{total_bank_value_addition:,} (Value added to all participating banks)"
+        )
+    
+    with col2:
+        st.metric(
+            "Total Ecosystem Value",
+            f"₹{ecosystem_value / 10000000:.1f} Cr",
+            help=f"₹{ecosystem_value:,} (Combined value for FarmerPay + Banks)"
+        )
+    
+    with col3:
+        # Calculate value per farmer
+        value_per_farmer = ecosystem_value / num_farmers if num_farmers > 0 else 0
+        st.metric(
+            "Value per Farmer",
+            f"₹{value_per_farmer:,.0f}",
+            help="Total ecosystem value divided by number of farmers"
+        )
+
+# Optimal Pricing Analysis for FarmerPay
+if include_farmerpay:
+    st.header("🎯 Optimal FarmerPay Pricing Analysis")
+    
+    # Calculate optimal pricing range
+    if bank_type == "Scheduled Commercial Banks (SCBs)":
+        price_range = np.arange(600, 1001, 50)
+    elif bank_type == "Regional Rural Banks (RRBs)":
+        price_range = np.arange(450, 751, 50)
+    else:  # Cooperative Banks
+        price_range = np.arange(350, 651, 50)
+    
+    pricing_data = []
+    for test_fee in price_range:
+        test_metrics_fp = calculate_metrics(loan_amount, interest_rate, npa_rate, bank_params_fp, int(test_fee))
+        test_net_value = test_metrics_fp['net_profit'] - metrics['net_profit']
+        test_roi = ((test_net_value / test_fee) * 100) if test_fee > 0 else 0
         
-        scenario_results.append({
-            'Scenario': scenario,
-            'Final_Farmers': f"{final_farmers:,.0f}",
-            'Final_Revenue': f"₹{final_revenue/10000000:.1f} Cr",
-            'Final_Profit': f"₹{final_profit/10000000:.1f} Cr",
-            'Market_Share': f"{market_share*100:.1f}%",
-            'Valuation': f"₹{final_revenue*8/10000000:.0f} Cr"
+        pricing_data.append({
+            'Fee': test_fee,
+            'Bank_Net_Profit': test_metrics_fp['net_profit'],
+            'Net_Value_Addition': test_net_value,
+            'ROI': test_roi,
+            'Monthly_Value': test_net_value / 12,
+            'Break_Even_Months': test_fee / (test_net_value / 12) if test_net_value > 0 else float('inf')
         })
     
-    scenario_df = pd.DataFrame(scenario_results)
-    st.dataframe(scenario_df, use_container_width=True, hide_index=True)
+    pricing_df = pd.DataFrame(pricing_data)
+    
+    # Find optimal fee (highest net value that maintains positive ROI)
+    viable_fees = pricing_df[pricing_df['Net_Value_Addition'] > 0]
+    if not viable_fees.empty:
+        max_idx = viable_fees['Net_Value_Addition'].idxmax()
+        optimal_fee = viable_fees.loc[max_idx, 'Fee']
+        optimal_roi = viable_fees.loc[max_idx, 'ROI']
+        
+        st.success(f"**Recommended FarmerPay Fee: ₹{optimal_fee:,.0f}** (ROI: {optimal_roi:.0f}%)")
+    
+    # Pricing sensitivity chart
+    fig_pricing = make_subplots(
+        rows=2, cols=1,
+        subplot_titles=('Bank Net Profit vs FarmerPay Fee', 'ROI vs FarmerPay Fee'),
+        vertical_spacing=0.15
+    )
+    
+    # Bank profit line
+    fig_pricing.add_trace(
+        go.Scatter(
+            x=pricing_df['Fee'],
+            y=pricing_df['Bank_Net_Profit'],
+            mode='lines+markers',
+            name='Bank Net Profit',
+            line=dict(color='green')
+        ),
+        row=1, col=1
+    )
+    
+    # Current fee point
+    fig_pricing.add_trace(
+        go.Scatter(
+            x=[farmerpay_fee],
+            y=[metrics_fp['net_profit']],
+            mode='markers',
+            name='Current Fee',
+            marker=dict(color='red', size=10)
+        ),
+        row=1, col=1
+    )
+    
+    # ROI line
+    fig_pricing.add_trace(
+        go.Scatter(
+            x=pricing_df['Fee'],
+            y=pricing_df['ROI'],
+            mode='lines+markers',
+            name='ROI %',
+            line=dict(color='blue')
+        ),
+        row=2, col=1
+    )
+    
+    # Current ROI point
+    fig_pricing.add_trace(
+        go.Scatter(
+            x=[farmerpay_fee],
+            y=[roi],
+            mode='markers',
+            name='Current ROI',
+            marker=dict(color='darkblue', size=10)
+        ),
+        row=2, col=1
+    )
+    
+    fig_pricing.update_layout(
+        title="FarmerPay Pricing Impact Analysis",
+        height=600,
+        showlegend=True
+    )
+    
+    fig_pricing.update_xaxes(title_text="FarmerPay Fee (₹)", row=2, col=1)
+    fig_pricing.update_yaxes(title_text="Bank Net Profit (₹)", row=1, col=1)
+    fig_pricing.update_yaxes(title_text="ROI (%)", row=2, col=1)
+    
+    st.plotly_chart(fig_pricing, use_container_width=True)
 
-# ... [the rest of the tabs and dashboard as in your original code, unchanged] ...
+# Charts section
+st.header("📊 Visual Analysis")
+
+if include_farmerpay:
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Comparison bar chart
+        comparison_chart_data = pd.DataFrame({
+            'Metric': ['Revenue', 'Costs', 'Net Profit'],
+            'Current': [metrics['total_revenue'], metrics['total_costs'], metrics['net_profit']],
+            'With FarmerPay': [metrics_fp['total_revenue'], metrics_fp['total_costs'], metrics_fp['net_profit']]
+        })
+        
+        fig_comparison = px.bar(
+            comparison_chart_data,
+            x='Metric',
+            y=['Current', 'With FarmerPay'],
+            title="Current vs FarmerPay Financial Comparison",
+            barmode='group'
+        )
+        st.plotly_chart(fig_comparison, use_container_width=True)
+    
+    with col2:
+        # FarmerPay value breakdown
+        value_data = {
+            'Revenue Increase': revenue_increase,
+            'Cost Reduction': cost_reduction,
+            'Provisioning Savings': provisioning_savings,
+            'FarmerPay Fee': -farmerpay_fee
+        }
+        
+        fig_value = px.bar(
+            x=list(value_data.keys()),
+            y=list(value_data.values()),
+            title="FarmerPay Value Component Breakdown",
+            color=list(value_data.values()),
+            color_continuous_scale=['red', 'yellow', 'green']
+        )
+        fig_value.update_layout(showlegend=False)
+        st.plotly_chart(fig_value, use_container_width=True)
+    
+    # FarmerPay scaling analysis chart
+    st.subheader("📈 FarmerPay Business Scaling Analysis")
+    
+    # Create scaling data for different farmer counts
+    farmer_scale_range = np.array([1000, 5000, 10000, 25000, 50000, 100000, 250000, 500000, 1000000])
+    scaling_data = []
+    
+    for scale in farmer_scale_range:
+        scale_revenue = scale * total_revenue_per_farmer
+        scale_direct_costs = scale * total_direct_cost_per_farmer  # ₹500 per farmer (₹400 service + ₹100 tech)
+        scale_gross_profit = scale_revenue - scale_direct_costs
+        scale_intermediary_payment = scale_gross_profit * 0.30 if scale_gross_profit > 0 else 0
+        scale_profit = scale_gross_profit - scale_intermediary_payment
+        
+        # Platform investment based on scale
+        if scale <= 10000:
+            investment = 50000000
+        elif scale <= 100000:
+            investment = 100000000
+        else:
+            investment = 200000000
+        
+        scale_roi = (scale_profit / investment) * 100
+        
+        scaling_data.append({
+            'Farmers': scale,
+            'Revenue_Cr': scale_revenue / 10000000,
+            'Profit_Cr': scale_profit / 10000000,
+            'ROI': scale_roi
+        })
+    
+    scaling_df = pd.DataFrame(scaling_data)
+    
+    # Create scaling chart
+    fig_scaling = make_subplots(
+        rows=2, cols=1,
+        subplot_titles=('FarmerPay Profit vs Number of Farmers', 'FarmerPay ROI vs Number of Farmers'),
+        vertical_spacing=0.15
+    )
+    
+    # Profit line
+    fig_scaling.add_trace(
+        go.Scatter(
+            x=scaling_df['Farmers'],
+            y=scaling_df['Profit_Cr'],
+            mode='lines+markers',
+            name='FarmerPay Profit',
+            line=dict(color='green', width=3)
+        ),
+        row=1, col=1
+    )
+    
+    # Current scale point
+    current_profit_cr = farmerpay_net_profit / 10000000
+    fig_scaling.add_trace(
+        go.Scatter(
+            x=[num_farmers],
+            y=[current_profit_cr],
+            mode='markers',
+            name='Current Scale',
+            marker=dict(color='red', size=12, symbol='star')
+        ),
+        row=1, col=1
+    )
+    
+    # ROI line
+    fig_scaling.add_trace(
+        go.Scatter(
+            x=scaling_df['Farmers'],
+            y=scaling_df['ROI'],
+            mode='lines+markers',
+            name='FarmerPay ROI',
+            line=dict(color='blue', width=3)
+        ),
+        row=2, col=1
+    )
+    
+    # Current ROI point
+    fig_scaling.add_trace(
+        go.Scatter(
+            x=[num_farmers],
+            y=[farmerpay_roi],
+            mode='markers',
+            name='Current ROI',
+            marker=dict(color='darkblue', size=12, symbol='star')
+        ),
+        row=2, col=1
+    )
+    
+    fig_scaling.update_layout(
+        title="FarmerPay Business Scaling Projections",
+        height=600,
+        showlegend=True
+    )
+    
+    fig_scaling.update_xaxes(title_text="Number of Farmers", type="log", row=2, col=1)
+    fig_scaling.update_xaxes(type="log", row=1, col=1)
+    fig_scaling.update_yaxes(title_text="Profit (₹ Crores)", row=1, col=1)
+    fig_scaling.update_yaxes(title_text="ROI (%)", row=2, col=1)
+    
+    st.plotly_chart(fig_scaling, use_container_width=True)
+
+else:
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Revenue breakdown pie chart
+        revenue_data = {
+            'Interest Income': metrics['interest_income'],
+            'Government Subvention': metrics['govt_subvention'],
+            'Other Revenue': metrics['other_revenue']
+        }
+        
+        fig_revenue = px.pie(
+            values=list(revenue_data.values()),
+            names=list(revenue_data.keys()),
+            title="Revenue Breakdown"
+        )
+        fig_revenue.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig_revenue, use_container_width=True)
+    
+    with col2:
+        # Cost breakdown pie chart
+        cost_data = {
+            'Operational Costs': metrics['operational_costs'],
+            'NPA Provisioning': metrics['npa_provisioning']
+        }
+        
+        fig_costs = px.pie(
+            values=list(cost_data.values()),
+            names=list(cost_data.keys()),
+            title="Cost Breakdown"
+        )
+        fig_costs.update_traces(textposition='inside', textinfo='percent+label')
+        st.plotly_chart(fig_costs, use_container_width=True)
+
+# NPA Impact Analysis
+st.header("🎯 NPA Impact Analysis")
+
+# Create NPA sensitivity analysis
+npa_range = np.arange(0.5, min(25.0, npa_rate * 2), 0.5)
+sensitivity_data = []
+
+for test_npa in npa_range:
+    test_params = get_bank_parameters(bank_type, test_npa)
+    test_metrics = calculate_metrics(loan_amount, interest_rate, test_npa, test_params)
+    sensitivity_data.append({
+        'NPA_Rate': test_npa,
+        'Net_Profit': test_metrics['net_profit'],
+        'NPA_Provisioning': test_metrics['npa_provisioning'],
+        'Total_Revenue': test_metrics['total_revenue']
+    })
+
+sensitivity_df = pd.DataFrame(sensitivity_data)
+
+# Plot NPA sensitivity
+fig_sensitivity = make_subplots(
+    rows=2, cols=1,
+    subplot_titles=('Net Profit vs NPA Rate', 'NPA Provisioning vs NPA Rate'),
+    vertical_spacing=0.1
+)
+
+# Net profit line
+fig_sensitivity.add_trace(
+    go.Scatter(
+        x=sensitivity_df['NPA_Rate'],
+        y=sensitivity_df['Net_Profit'],
+        mode='lines+markers',
+        name='Net Profit',
+        line=dict(color='green')
+    ),
+    row=1, col=1
+)
+
+# Current NPA point
+fig_sensitivity.add_trace(
+    go.Scatter(
+        x=[npa_rate],
+        y=[metrics['net_profit']],
+        mode='markers',
+        name='Current NPA',
+        marker=dict(color='red', size=10)
+    ),
+    row=1, col=1
+)
+
+# NPA provisioning line
+fig_sensitivity.add_trace(
+    go.Scatter(
+        x=sensitivity_df['NPA_Rate'],
+        y=sensitivity_df['NPA_Provisioning'],
+        mode='lines+markers',
+        name='NPA Provisioning',
+        line=dict(color='red')
+    ),
+    row=2, col=1
+)
+
+# Current NPA provisioning point
+fig_sensitivity.add_trace(
+    go.Scatter(
+        x=[npa_rate],
+        y=[metrics['npa_provisioning']],
+        mode='markers',
+        name='Current Provisioning',
+        marker=dict(color='darkred', size=10)
+    ),
+    row=2, col=1
+)
+
+fig_sensitivity.update_layout(
+    title="NPA Rate Impact on Profitability",
+    height=600,
+    showlegend=True
+)
+
+fig_sensitivity.update_xaxes(title_text="NPA Rate (%)", row=2, col=1)
+fig_sensitivity.update_yaxes(title_text="Net Profit (₹)", row=1, col=1)
+fig_sensitivity.update_yaxes(title_text="NPA Provisioning (₹)", row=2, col=1)
+
+st.plotly_chart(fig_sensitivity, use_container_width=True)
+
+# Portfolio Analysis
+st.header("💼 Portfolio Impact Analysis")
+
+portfolio_size = st.selectbox("Portfolio Size (Number of KCCs)", [100, 500, 1000, 2000, 5000], index=2)
+
+if include_farmerpay:
+    current_portfolio_profit = metrics['net_profit'] * portfolio_size
+    fp_portfolio_profit = metrics_fp['net_profit'] * portfolio_size
+    portfolio_improvement = fp_portfolio_profit - current_portfolio_profit
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            "Current Portfolio Profit", 
+            f"₹{current_portfolio_profit / 100000:.1f}L",
+            help=f"₹{current_portfolio_profit:,.0f}"
+        )
+    
+    with col2:
+        st.metric(
+            "With FarmerPay", 
+            f"₹{fp_portfolio_profit / 100000:.1f}L",
+            help=f"₹{fp_portfolio_profit:,.0f}"
+        )
+    
+    with col3:
+        st.metric(
+            "Portfolio Improvement", 
+            f"₹{portfolio_improvement / 100000:.1f}L",
+            delta=f"{((portfolio_improvement / current_portfolio_profit) * 100 if current_portfolio_profit != 0 else 0):.1f}%",
+            help=f"₹{portfolio_improvement:,.0f}"
+        )
+    
+    with col4:
+        annual_fp_investment = farmerpay_fee * portfolio_size
+        portfolio_roi = ((portfolio_improvement / annual_fp_investment) * 100) if annual_fp_investment > 0 else 0
+        st.metric(
+            "Portfolio ROI", 
+            f"{portfolio_roi:.0f}%",
+            help=f"Annual FarmerPay investment: ₹{annual_fp_investment:,.0f}"
+        )
+    
+    # 5-Year Impact Analysis
+    st.subheader("📈 5-Year Cumulative Impact")
+    
+    five_year_investment = annual_fp_investment * 5
+    five_year_benefits = portfolio_improvement * 5
+    five_year_net_value = five_year_benefits - five_year_investment
+    five_year_roi = ((five_year_net_value / five_year_investment) * 100) if five_year_investment > 0 else 0
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("5-Year Investment", f"₹{five_year_investment / 100000:.1f}L")
+    
+    with col2:
+        st.metric("5-Year Benefits", f"₹{five_year_benefits / 100000:.1f}L")
+    
+    with col3:
+        st.metric("5-Year Net Value", f"₹{five_year_net_value / 100000:.1f}L")
+    
+    with col4:
+        st.metric("5-Year Total ROI", f"{five_year_roi:.0f}%")
+
+else:
+    portfolio_profit = metrics['net_profit'] * portfolio_size
+    portfolio_revenue = metrics['total_revenue'] * portfolio_size
+    portfolio_costs = metrics['total_costs'] * portfolio_size
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Portfolio Net Profit", f"₹{portfolio_profit:,.0f}")
+    
+    with col2:
+        st.metric("Portfolio Revenue", f"₹{portfolio_revenue:,.0f}")
+    
+    with col3:
+        st.metric("Portfolio Costs", f"₹{portfolio_costs:,.0f}")
+
+# Additional insights
+st.header("💡 Key Insights & Recommendations")
+
+insights = []
+
+if include_farmerpay:
+    # FarmerPay specific insights
+    if net_value > 0:
+        insights.append("✅ FarmerPay integration is highly beneficial for this bank")
+        insights.append(f"💰 Expected annual value addition: ₹{net_value:,.0f} per KCC")
+        
+        if break_even_months < 6:
+            insights.append(f"⚡ Extremely fast break-even: {break_even_months:.1f} months")
+        elif break_even_months < 12:
+            insights.append(f"✅ Acceptable break-even period: {break_even_months:.1f} months")
+        else:
+            insights.append(f"⚠️ Long break-even period: {break_even_months:.1f} months")
+    else:
+        insights.append("❌ FarmerPay fee is too high for current benefits")
+        insights.append("💡 Consider negotiating a lower fee or improving operational efficiency")
+    
+    # NPA improvement insights
+    npa_reduction = npa_rate - metrics_fp['effective_npa']
+    insights.append(f"📉 FarmerPay reduces effective NPA by {npa_reduction:.1f}% points")
+    insights.append(f"💵 Annual provisioning savings: ₹{provisioning_savings:,.0f}")
+    
+    # Pricing recommendations
+    if bank_type == "Scheduled Commercial Banks (SCBs)":
+        if farmerpay_fee > 850:
+            insights.append("💡 Consider reducing FarmerPay fee below ₹850 for better ROI")
+        elif farmerpay_fee < 700:
+            insights.append("💡 Current fee provides excellent value - could potentially increase")
+    elif bank_type == "Regional Rural Banks (RRBs)":
+        if farmerpay_fee > 650:
+            insights.append("💡 Consider reducing FarmerPay fee below ₹650 for better ROI") 
+        elif farmerpay_fee < 550:
+            insights.append("💡 Current fee provides excellent value - could potentially increase")
+    else:  # Cooperative Banks
+        if farmerpay_fee > 550:
+            insights.append("💡 Consider reducing FarmerPay fee below ₹550 for better ROI")
+        elif farmerpay_fee < 400:
+            insights.append("💡 Current fee provides excellent value - could potentially increase")
+    
+    # FarmerPay business insights
+    insights.append(f"🏢 FarmerPay can generate ₹{farmerpay_net_profit / 10000000:.1f} Cr annual profit at {num_farmers:,} farmers")
+    insights.append(f"📈 FarmerPay ROI: {farmerpay_roi:.1f}% on platform investment")
+    
+    if farmerpay_roi > 50:
+        insights.append("✅ Excellent ROI - FarmerPay business model is highly profitable")
+    elif farmerpay_roi > 25:
+        insights.append("✅ Good ROI - FarmerPay business model is profitable")
+    else:
+        insights.append("⚠️ Low ROI - Consider scaling up or optimizing costs")
+    
+    # Scale insights
+    if num_farmers >= 100000:
+        insights.append("🚀 Large scale deployment - significant market impact")
+    elif num_farmers >= 50000:
+        insights.append("📈 Medium scale deployment - good market penetration")
+    else:
+        insights.append("🌱 Small scale deployment - room for growth")
+
+else:
+    # Standard insights without FarmerPay
+    if metrics['net_profit'] > 0:
+        insights.append("✅ The current configuration is profitable")
+    else:
+        insights.append("❌ The current configuration results in losses")
+
+# Common insights for both scenarios
+if npa_rate > 15:
+    insights.append("⚠️ High NPA rate significantly impacts profitability")
+    if include_farmerpay:
+        insights.append("💡 FarmerPay's NPA reduction capabilities are especially valuable here")
+elif npa_rate > 10:
+    insights.append("⚠️ Moderate NPA rate - monitor closely")
+else:
+    insights.append("✅ NPA rate is within acceptable range")
+
+if metrics['npa_provisioning'] > metrics['interest_income']:
+    insights.append("❌ NPA provisioning exceeds interest income")
+    if include_farmerpay:
+        insights.append("💡 FarmerPay can help reduce this provisioning burden")
+
+# ROI calculations
+current_roi = (metrics['net_profit'] / loan_amount) * 100 if loan_amount > 0 else 0
+
+if include_farmerpay:
+    fp_roi = (metrics_fp['net_profit'] / loan_amount) * 100 if loan_amount > 0 else 0
+    insights.append(f"📈 Current ROI: {current_roi:.2f}% → With FarmerPay: {fp_roi:.2f}%")
+    
+    # Portfolio scaling insights
+    if portfolio_size >= 1000:
+        insights.append(f"🚀 At {portfolio_size} KCCs, annual portfolio improvement: ₹{portfolio_improvement / 100000:.1f}L")
+else:
+    insights.append(f"📈 Return on Investment: {current_roi:.2f}%")
+
+for insight in insights:
+    st.write(insight)
 
 # Footer
 st.markdown("---")
-st.markdown("""
-<div style="text-align: center; color: #666; font-style: italic;">
-    <p>🚀 FarmerPay Profitability Optimizer v2.0 | Advanced Business Intelligence Platform</p>
-    <p>Built with ❤️ for Agricultural FinTech Innovation</p>
-    <p><em>This analysis provides strategic insights based on market data and business modeling. 
-    Results may vary based on execution and market conditions.</em></p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown("*This calculator provides estimates based on standard banking practices and may vary based on specific bank policies and market conditions.*")
